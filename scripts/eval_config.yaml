@@ -1,0 +1,48 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
+description: Evaluate models on MLGym
+
+target:
+  service: sing
+  name: msroctovc
+  workspace_name: aifrontiers_ws
+
+environment:
+  image: nvidia25.03-pytorch2.7.1-te2.4-deepspeed0.17.1-flashattn2.8.0.post2-vllm0.9.1:20250627
+  registry: aifrontiers.azurecr.io
+  setup:
+    - set -e -o xtrace
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - uv venv --python 3.10
+    - source .venv/bin/activate
+    - uv pip install -e .
+    - uv pip install xformers
+    - ln -s /mnt/aifshared/data/jcai/mlgym_task_data/ data
+
+storage:
+  aifshared:
+    storage_account_name: aifshared
+    container_name: data
+  output:
+    storage_account_name: aifshared
+    container_name: amulet
+
+code:
+  local_dir: ~/MS_intern_2025/MLGym
+
+jobs:
+  - name: eval_all
+    sku: 1x40G4-A100
+    sla_tier: standard
+    priority: medium
+    mpi: True
+    process_count_per_node: 1
+    command:
+      - bash scripts/run_selected_models.sh
+      - cp -r trajectories $$AMLT_OUTPUT_DIR
+    submit_args:
+      env:
+        WANDB_API_KEY: local-caf46ffffc84feab44e6da3913e16b683be41c53
+        WANDB_HOST: https://microsoft-research.wandb.io
+        _AZUREML_SINGULARITY_JOB_UAI: /subscriptions/d4fe558f-6660-4fe7-99ec-ae4716b5e03f/resourceGroups/aifrontiers/providers/Microsoft.ManagedIdentity/userAssignedIdentities/aifrontiers

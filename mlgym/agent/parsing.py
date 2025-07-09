@@ -210,9 +210,23 @@ class MLGymThoughtActionParser(ParseFunction):
         matches = re.findall(pattern, text, re.MULTILINE)
         return [block.strip() for block in matches]
 
+    def _extract_thinking(self, text: str) -> str:
+        """
+        Extracts and concatenates all content between <think> and </think> tags.
+        """
+        pattern = r"<think>([\s\S]*?)</think>"
+        matches = re.findall(pattern, text, re.MULTILINE)
+        return "\n".join(m.strip() for m in matches)
+
+    def _remove_thinking(self, text: str) -> str:
+        """
+        Removes all content between <think> and </think> tags (including the tags).
+        """
+        return re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.MULTILINE)
+
     def __call__(self, model_response: str, commands: list[Command], strict: bool = False) -> tuple[str, str]:
         """
-        Parse response with discussion and code block.
+        Parse response with discussion and code block, handling <think>...</think> tags.
 
         Args:
             model_response (str): Raw model response
@@ -225,7 +239,11 @@ class MLGymThoughtActionParser(ParseFunction):
         Raises:
             FormatError: If multiple code blocks found or no action found
         """
-        code_blocks = self._extract_code_blocks(model_response)
+        # Extract and remove <think>...</think> content
+        thinking = self._extract_thinking(model_response)
+        response_wo_thinking = self._remove_thinking(model_response)
+
+        code_blocks = self._extract_code_blocks(response_wo_thinking)
         if len(code_blocks) > 1:
             msg = "Found more than one code block in the model response."
             raise FormatError(msg)
@@ -233,7 +251,7 @@ class MLGymThoughtActionParser(ParseFunction):
         code_block_pat = re.compile(r"^```(\S*)\s*\n|^```\s*$", re.MULTILINE)
         stack: list[re.Match[str]] = []
         last_valid_block = None
-        for match in code_block_pat.finditer(model_response):
+        for match in code_block_pat.finditer(response_wo_thinking):
             if stack and not match.group(1):  # Closing of a code block
                 start = stack.pop()
                 # Check if it's not nested within another block
@@ -243,8 +261,11 @@ class MLGymThoughtActionParser(ParseFunction):
                 stack.append(match)
         if last_valid_block:
             start, end = last_valid_block
-            thought = model_response[: start.start()] + model_response[end.end() :]
-            return thought, model_response[start.end() : end.start()]
+            thought = response_wo_thinking[: start.start()] + response_wo_thinking[end.end() :]
+            # Add back the thinking part (if any)
+            if thinking:
+                thought = thinking + "\n" + thought.strip()
+            return thought.strip(), response_wo_thinking[start.end() : end.start()].strip()
         msg = "No action found in model response."
         raise FormatError(msg)
 
@@ -565,3 +586,36 @@ def should_quote(value: str | Any, command: Command) -> bool:  # noqa: ANN401
         have an end_name specified.
     """
     return isinstance(value, str) and command.end_name is None
+
+
+if __name__ == "__main__":
+    # Example usage of the parsers
+    parser = MLGymThoughtActionParser()
+    response = '''
+The error in `evaluate.py` occurs because the import statement for `heuristic_fn` assumes that `heuristic.py` is a package, which is not the case. Since `heuristic.py` is a standalone script, we should modify the import statement to import the function        
+directly from the script.                                                                                                                                                                                                                                           
+                                                                                                                                                                                                                                                                    
+**Discussion:**                                                                                                                                                                                                                                                     
+1. **Modify Import Statement:** Change the import statement in `evaluate.py` to import `heuristic_fn` directly from the `heuristic` script, rather than as a package.                                                                                               
+2. **Testing Integration:** After modifying the import, we should be able to run `evaluate.py` again to validate the updated heuristic function.                                                                                                                    
+3. **Check for Errors:** After running the evaluation, check the output for any discrepancies or errors to ensure that everything is working as expected.                                                                                                           
+                                                                                                                                                                                                                                                                    
+Let's update the `evaluate.py` file to correctly import the `heuristic_fn` function.                                                                                                                                                                                
+                                                                                                                                                                                                                                                                    
+**Command:**                                                                                                                                                                                                                                                        
+```bash                                                                                                                                                                                                                                                             
+edit 9:9                                                                                                                                                                                                                                                            
+"""                                                                                                                                                                                                                                                                 
+from heuristic import heuristic_fn                                                                                                                                                                                                                                  
+"""                                                                                                                                                                                                                                                                 
+end_of_edit                                                                                                                                                                                                                                                         
+```                                                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                                                    
+Replace the incorrect line with:                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                    
+```python                                                                                                                                                                                                                                                           
+from heuristic import heuristic_fn                                                                                                                                                                                                                                  
+```
+'''
+    thought, action = parser(response, [])
+    print(f"Thought: {thought}\nAction: {action}")

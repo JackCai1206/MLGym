@@ -3,6 +3,7 @@
 #!/bin/bash
 
 # List of models to test
+if [ -z "${MODELS+x}" ]; then
 MODELS=(
     "llama3-405b-tools"
     "gpt4o2"
@@ -10,6 +11,7 @@ MODELS=(
     "claude-35-sonnet-new"
     "gemini-15-pro"
 )
+fi
 
 # Function to run experiment
 run_experiment() {

@@ -42,6 +42,24 @@ class LiteLLMModel(BaseModel):
 
     def _setup_client(self) -> None:
         self.model_name = self.args.model_name.split(":")[1]
+        if self.model_name.startswith('azure/'):
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider, AzureCliCredential
+            self.credential = get_bearer_token_provider(AzureCliCredential(), "api://trapi/.default")
+            # When we use Phi models from Microsoft internal endpoint, we mock the model cost object as the Azure AI studio cost object.
+            if self.model_name not in litellm.model_cost:
+                cost_obj = litellm.model_cost.get(self.model_name.replace('azure/', 'azure_ai/'), None)
+                cost_obj['litellm_provider'] = 'azure'
+                # cost_obj['input_tokens'] = 128000
+                # cost_obj['output_tokens'] = 128000
+                litellm.model_cost[self.model_name] = cost_obj
+        if self.model_name.startswith('hosted_vllm/'):
+            if self.model_name not in litellm.model_cost:
+                cost_obj = litellm.model_cost.get(self.model_name.replace('hosted_vllm/microsoft/', 'azure_ai/'), {})
+                if cost_obj is not None:
+                    cost_obj['litellm_provider'] = 'hosted_vllm/microsoft'
+                litellm.model_cost[self.model_name] = cost_obj
+
+
         self.model_max_input_tokens = litellm.model_cost.get(self.model_name, {}).get("max_input_tokens")
         self.model_max_output_tokens = litellm.model_cost.get(self.model_name, {}).get("max_output_tokens")
         self.lm_provider = litellm.model_cost.get(self.model_name, {}).get("litellm_provider")
@@ -118,10 +136,16 @@ class LiteLLMModel(BaseModel):
         if self.args.host_url:
             extra_args["api_base"] = self.args.host_url
 
-        completion_kwargs = self.args.completion_kwargs
         if self.lm_provider == "anthropic":
-            completion_kwargs["max_tokens"] = self.model_max_output_tokens
+            extra_args["max_tokens"] = self.model_max_output_tokens
+        if self.model_name.startswith('azure'):
+            extra_args['azure_ad_token_provider'] = self.credential
+        if 'hosted_vllm/microsoft/Phi-4-reasoning' in self.model_name:
+            extra_args['supports_system_message'] = False
+
+        completion_kwargs = self.args.completion_kwargs
         try:
+            assert self.args.temperature is None and self.args.top_p is None
             response: litellm.types.utils.ModelResponse = litellm.completion(
                 model=self.model_name,
                 messages=messages,

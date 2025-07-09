@@ -96,8 +96,11 @@ class ScriptArguments(FlattenedAccess, FrozenSerializable):
         # install_env = self.environment.install_environment
         install_env = False
 
+        temp_str = f"{temp:.2f}" if temp is not None else "None"
+        top_p_str = f"{top_p:.2f}" if top_p is not None else "None"
+
         return (
-            f"{model_name}__{task_id}__{config_stem}__t-{temp:.2f}__p-{top_p:.2f}"
+            f"{model_name}__{task_id}__{config_stem}__t-{temp_str}__p-{top_p_str}"
             + f"__c-{per_instance_cost_limit:.2f}__install-{int(install_env)}"
             + (f"__{self.suffix}" if self.suffix else "")
         )
@@ -244,8 +247,8 @@ def get_args(args: list[str] | None = None) -> ScriptArguments:
                 model_name="litellm:gpt-4o",
                 total_cost_limit=0.0,
                 per_instance_cost_limit=3.0,
-                temperature=0.0,
-                top_p=0.95,
+                temperature=None,
+                top_p=None,
             ),
             agent_config_path=CONFIG_DIR / "agents" / "default.yaml",
         ),

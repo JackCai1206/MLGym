@@ -132,12 +132,15 @@ def main(options: Options):
         failed_runs = 0  # number of runs with no agent scores
         incomplete_runs = 0  # number of runs that exit due to error
         exit_statuses = []
-        traj_dir_pattern = f"{options.traj_parent_dir}/*{model}*{options.traj_pattern}*"
+        traj_dir_pattern = f"{options.traj_parent_dir}/{model}{options.traj_pattern}*"
         traj_dirs = sorted(list(Path().glob(traj_dir_pattern)))
         results = []
         for traj_dir in traj_dirs:
+            results_exist = True
             if not (Path(traj_dir) / "results.json").exists():
+                results_exist = False
                 failed_runs += 1
+
             # find trajectory file ending in .traj
             traj_files = list(Path(traj_dir).glob("*.traj"))
             if len(traj_files) != 0:
@@ -158,7 +161,8 @@ def main(options: Options):
                     incomplete_runs += 1
                 exit_statuses.append(exit_status)
 
-            results.append(json.load(open(Path(traj_dir) / "results.json")))
+            if results_exist:
+                results.append(json.load(open(Path(traj_dir) / "results.json")))
 
         # add baseline scores if not already added
         if "baseline" not in scores:

@@ -264,6 +264,7 @@ class BaseAgent:
         system_msg = self.config.system_template.format(**self.system_args, **asdict(self.task_args))
         self.logger.log(self._default_logging_level, f"SYSTEM ({self.name})\n{system_msg}")
         self._append_history(HistoryItem({"role": "system", "content": system_msg, "agent": self.name}))
+        # self._append_history(HistoryItem({"role": "user", "content": system_msg, "agent": self.name}))
         # FIXME: We don't need to add the demonstrations in setup. Or we should separate it out into a separate method based on the user agent definition.
         if "history_to_messages" in dir(self.model):
             for demonstration_path in self.config.demonstrations:

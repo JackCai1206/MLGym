@@ -4,6 +4,7 @@
 # ./scripts/experiments/memory/rlMountainCarContinuous.sh
 
 # List of models to test
+if [ -z "${MODELS+x}" ]; then
 MODELS=(
     "llama3-405b-tools"
     "gpt4o2"
@@ -11,6 +12,7 @@ MODELS=(
     "claude-35-sonnet-new"
     "gemini-15-pro"
 )
+fi
 
 # Loop through each model and run the experiment
 for model in "${MODELS[@]}"; do
